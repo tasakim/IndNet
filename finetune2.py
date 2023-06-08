@@ -10,7 +10,7 @@ from copy import deepcopy
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_path', type=str, default='')
-parser.add_argument('--dataset', type=str, default='cifar10',)
+parser.add_argument('--dataset', type=str, default='cifar10', )
 parser.add_argument('--batch_size', type=int, default=256)
 parser.add_argument('--lr', type=float, default=0.1)
 parser.add_argument('--lr_type', type=str, default='cos')
@@ -34,7 +34,7 @@ else:
 # l3 = [3, 5, 7, 9, 12, 14, 16, 19]
 # skip = [10, 17]
 
-l1 = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56] #r56
+l1 = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56]  # r56
 l2 = []
 l3 = [3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 43, 45, 47, 49, 51, 53, 55, 57]
 skip = [22, 41]
@@ -43,7 +43,6 @@ l = {
     'l2': l2,
     'l3': l3,
     'skip': skip}
-
 
 
 def main():
@@ -56,7 +55,6 @@ def main():
     regularization = None
     criterions = {'criterion': criterion, 'regularization': regularization}
     ori_model = torch.load(args.checkpoint)
-    masked_model = deepcopy(ori_model)
     pruned_model = deepcopy(ori_model)
 
     ori_model.cuda(args.local_rank)
@@ -71,11 +69,6 @@ def main():
     top1, top5 = test(0, test_loader, pruned_model, criterions, tb_logger=None, args=args)
     print_rank0('---------------Pruned Model Acc {}|{}%---------------'.format(top1, top5))
 
-    masked_model.cuda(args.local_rank)
-    masked_model = mask_model(masked_model, l)
-    print_rank0('---------------Test Masked Model---------------')
-    top1, top5 = test(0, test_loader, masked_model, criterions, tb_logger=None, args=args)
-    print_rank0('---------------Masked Model Acc {}|{}%---------------'.format(top1, top5))
 
     if dist.get_rank == 0:
         print(pruned_model)
@@ -93,7 +86,8 @@ def main():
                                                                                                 interval) \
                     + ' [Best : Accuracy={:.2f}, Error={:.2f}]'.format(recorder.max_accuracy(False),
                                                                        100 - recorder.max_accuracy(False)))
-        train_acc1, train_los1 = train(epoch, train_loader, pruned_model, criterions, optimizer, tb_logger=None, args=args)
+        train_acc1, train_los1 = train(epoch, train_loader, pruned_model, criterions, optimizer, tb_logger=None,
+                                       args=args)
 
         test_top1_2, test_los_2 = test(epoch, test_loader, pruned_model, criterions, tb_logger=None, args=args)
 
@@ -101,8 +95,6 @@ def main():
 
         is_best = recorder.update(epoch, train_los1, train_acc1, test_los_2, test_top1_2)
         interval = time.time() - begin
-
-
 
 
 if __name__ == '__main__':
