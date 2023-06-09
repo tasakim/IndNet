@@ -83,13 +83,10 @@ def main():
 
         # plot_similarity(model, epoch, args.arch)
         test_top1_2, test_los_2 = test(epoch, test_loader, model, criterions, tb_logger, args=args)
-        # model.cpu()
         transform(epoch+1, model, args)
         model.cuda(args.local_rank)
         # print(model)
         test_top1_2, test_los_2 = test(epoch, test_loader, model, criterions, tb_logger, args=args)
-        import pdb
-        pdb.set_trace()
         # merge(model, l, epoch, arr)
         is_best = recorder.update(epoch, train_los1, train_acc1, test_los_2, test_top1_2)
         interval = time.time() - begin
