@@ -653,8 +653,8 @@ class ExtraLoss(nn.Module):
 
 
 def transform(epoch, model, args):
-    cur_rate = (args.rate - args.compress_rate) * epoch / args.epochs
-    # cur_rate = 0.9 - (0.9 - 0.6) * epoch / 400
+    # cur_rate = args.rate - (args.rate - args.compress_rate) * epoch / args.epochs
+    cur_rate = 0.9 - (0.9 - 0.6) * epoch / 400
     for name, module in model.named_modules():
         if isinstance(module, ResNetBasicblock):
             layer1 = module.conv1
@@ -662,60 +662,64 @@ def transform(epoch, model, args):
             conv_weight = layer1.weight.data
             bias = layer1.bias.data if layer1.bias is not None else None
             keep_num = int(cur_rate*module.planes)
-            index = F.cosine_similarity(conv_weight.flatten(1).unsqueeze(1), conv_weight.flatten(1).unsqueeze(0), dim=-1).sum(dim=1).topk(conv_weight.shape[0] - keep_num).indices
-            index = index.sort().values
-            target = conv_weight[index, :]
-            mask = torch.ones(conv_weight.size(0), dtype=torch.bool)
-            mask[index] = False
-            new_conv_weight = conv_weight[mask, ...]
-            coefficients = []
-            for i, row in enumerate(target):
-                row = row.flatten()
-                matrix = new_conv_weight.flatten(1).t()
-                coefficient = torch.linalg.lstsq(matrix, row).solution.unsqueeze(-1)
-                coefficients.append(coefficient)
-                coeffi[mask, :].data += coeffi[index[i], :].data * coefficient
-            coefficients = torch.cat(coefficients, dim=-1)
+            device = conv_weight.device
+            if conv_weight.shape[0] - keep_num >=1:
+                index = F.cosine_similarity(conv_weight.flatten(1).unsqueeze(1), conv_weight.flatten(1).unsqueeze(0), dim=-1).sum(dim=1).topk(conv_weight.shape[0] - keep_num).indices
+                index = index.sort().values
+                target = conv_weight[index, :]
+                mask = torch.ones(conv_weight.size(0), dtype=torch.bool, device=device)
+                mask[index] = False
+                new_conv_weight = conv_weight[mask, ...]
+                coefficients = []
+                for i, row in enumerate(target):
+                    row = row.flatten()
+                    matrix = new_conv_weight.flatten(1).t()
+                    coefficient = torch.linalg.lstsq(matrix, row).solution.unsqueeze(-1)
+                    coefficients.append(coefficient)
+                    coeffi[mask, :].data += coeffi[index[i], :].data * coefficient
+                coefficients = torch.cat(coefficients, dim=-1)
 
-            new_layer = nn.Conv2d(in_channels=new_conv_weight.shape[1], out_channels=new_conv_weight.shape[0],
-                                  kernel_size=new_conv_weight.shape[2],
-                                  stride=layer1.stride, padding=layer1.padding, groups=layer1.groups,
-                                  dilation=layer1.dilation, bias=True if layer1.bias is not None else False)
-            new_layer.weight = nn.Parameter(new_conv_weight)
+                new_layer = nn.Conv2d(in_channels=new_conv_weight.shape[1], out_channels=new_conv_weight.shape[0],
+                                      kernel_size=new_conv_weight.shape[2],
+                                      stride=layer1.stride, padding=layer1.padding, groups=layer1.groups,
+                                      dilation=layer1.dilation, bias=True if layer1.bias is not None else False)
+                new_layer.weight = nn.Parameter(new_conv_weight)
 
-            new_layer.bias = nn.Parameter(bias) if layer1.bias is not None else None
+                new_layer.bias = nn.Parameter(bias) if layer1.bias is not None else None
 
-            set_module_v2(model, name, 'conv1', new_layer)
+                set_module_v2(model, name, 'conv1', new_layer)
 
-            new_weight = nn.Parameter(torch.cat([coeffi[mask, :], coefficients], dim=-1))
+                new_weight = nn.Parameter(torch.cat([coeffi[mask, :], coefficients], dim=-1))
 
-            set_module_v2(model, name, 'weight', new_weight)
+                set_module_v2(model, name, 'weight', new_weight)
 
-            layer_bn = module.bn1
-            weight = layer_bn.weight.data[mask]
-            bias = layer_bn.bias.data[mask]
-            running_mean = layer_bn.running_mean.data[mask]
-            running_var = layer_bn.running_var.data[mask]
-            new_layer = nn.BatchNorm2d(num_features=new_conv_weight.shape[0])
-            new_layer.weight.data = nn.Parameter(weight)
-            new_layer.bias.data = nn.Parameter(bias) if layer_bn.bias is not None else None
-            new_layer.running_mean = running_mean
-            new_layer.running_var = running_var
-            set_module_v2(model, name, 'bn1', new_layer)
+                layer_bn = module.bn1
+                weight = layer_bn.weight.data[mask]
+                bias = layer_bn.bias.data[mask]
+                running_mean = layer_bn.running_mean.data[mask]
+                running_var = layer_bn.running_var.data[mask]
+                new_layer = nn.BatchNorm2d(num_features=new_conv_weight.shape[0])
+                new_layer.weight.data = nn.Parameter(weight)
+                new_layer.bias.data = nn.Parameter(bias) if layer_bn.bias is not None else None
+                new_layer.running_mean = running_mean
+                new_layer.running_var = running_var
+                set_module_v2(model, name, 'bn1', new_layer)
 
-            layer2 = module.conv2
-            mask2 = torch.cat([mask, torch.ones([module.planes - len(mask)], dtype=torch.bool)], dim=0)
-            new_conv_weight = torch.concat([layer2.weight.data[:, mask2, ...], layer2.weight.data[:, ~mask2, ...]], dim=1)
-            bias = layer2.bias.data if layer2.bias is not None else None
-            new_layer = nn.Conv2d(in_channels=new_conv_weight.shape[1], out_channels=new_conv_weight.shape[0],
-                                 kernel_size=new_conv_weight.shape[2],
-                                 stride=layer2.stride, padding=layer2.padding, groups=layer2.groups,
-                                 dilation=layer2.dilation, bias=True if layer2.bias is not None else False)
-            new_layer.weight = nn.Parameter(new_conv_weight)
+                layer2 = module.conv2
+                mask2 = torch.cat([mask, torch.ones([module.planes - len(mask)], dtype=torch.bool, device=device)], dim=0)
+                new_conv_weight = torch.concat([layer2.weight.data[:, mask2, ...], layer2.weight.data[:, ~mask2, ...]], dim=1)
+                bias = layer2.bias.data if layer2.bias is not None else None
+                new_layer = nn.Conv2d(in_channels=new_conv_weight.shape[1], out_channels=new_conv_weight.shape[0],
+                                     kernel_size=new_conv_weight.shape[2],
+                                     stride=layer2.stride, padding=layer2.padding, groups=layer2.groups,
+                                     dilation=layer2.dilation, bias=True if layer2.bias is not None else False)
+                new_layer.weight = nn.Parameter(new_conv_weight)
 
-            new_layer.bias = nn.Parameter(bias) if layer2.bias is not None else None
+                new_layer.bias = nn.Parameter(bias) if layer2.bias is not None else None
 
-            set_module_v2(model, name, 'conv2', new_layer)
+                set_module_v2(model, name, 'conv2', new_layer)
+            else:
+                pass
 
 # if __name__ == '__main__':
 #     from models.cifar.resnet_v2 import resnet56_v2, ResNetBasicblock
