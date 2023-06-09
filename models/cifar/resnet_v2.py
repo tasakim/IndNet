@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch
 
-expand_ratio = 3
+expand_ratio = 1
 
 class linear_conv3x3(nn.Module):
 
@@ -31,14 +31,16 @@ class ResNetBasicblock(nn.Module):
 
     def __init__(self, inplanes, planes, stride=1, downsample=None, rate=1.0):
         super(ResNetBasicblock, self).__init__()
-        self.conv1 = nn.Conv2d(inplanes, int(rate * planes), kernel_size=3, stride=stride, padding=1)
-        self.weight = nn.Parameter(torch.randn([int(rate * planes), int((expand_ratio-rate)*planes)]), requires_grad=True)
-        self.bn1 = nn.BatchNorm2d(int(rate * planes))
+        self.conv1 = nn.Conv2d(inplanes, min(int(rate * planes), planes-1), kernel_size=3, stride=stride, padding=1, bias=False)
+        self.weight = nn.Parameter(torch.randn([min(int(rate * planes), planes-1), expand_ratio*planes-min(int(rate*planes), planes-1)]), requires_grad=True)
+        self.bn1 = nn.BatchNorm2d(min(int(rate * planes), planes-1))
         self.relu = nn.ReLU(inplace=True)
         self.conv2 = nn.Conv2d(int(expand_ratio * planes), planes, 3, 1, 1, bias=False)
         self.bn2 = nn.BatchNorm2d(planes)
         self.downsample = downsample
         self.stride = stride
+        self.planes = planes
+        self.inplanes = inplanes
 
     def forward(self, x):
         residual = x
@@ -121,10 +123,10 @@ class CifarResNet(nn.Module):
         feat = self.avgpool(out4)
         out = feat.view(feat.size(0), -1)
         out = self.fc(out)
-        return out2, out3, out4, feat, out
+        return out
 
 
-def resnet20(num_classes=10, rate=1.0):
+def resnet20_v2(num_classes=10, rate=1.0):
     """Constructs a ResNet-20 model for CIFAR-10 (by default)
   Args:
     num_classes (uint): number of classes
@@ -133,7 +135,7 @@ def resnet20(num_classes=10, rate=1.0):
     return model
 
 
-def resnet32(num_classes=10, rate=1.0):
+def resnet32_v2(num_classes=10, rate=1.0):
     """Constructs a ResNet-32 model for CIFAR-10 (by default)
   Args:
     num_classes (uint): number of classes
@@ -142,7 +144,7 @@ def resnet32(num_classes=10, rate=1.0):
     return model
 
 
-def resnet44(num_classes=10, rate=1.0):
+def resnet44_v2(num_classes=10, rate=1.0):
     """Constructs a ResNet-32 model for CIFAR-10 (by default)
   Args:
     num_classes (uint): number of classes
@@ -151,7 +153,7 @@ def resnet44(num_classes=10, rate=1.0):
     return model
 
 
-def resnet56(num_classes=10, rate=1.0):
+def resnet56_v2(num_classes=10, rate=1.0):
     """Constructs a ResNet-32 model for CIFAR-10 (by default)
   Args:
     num_classes (uint): number of classes
@@ -160,7 +162,7 @@ def resnet56(num_classes=10, rate=1.0):
     return model
 
 
-def resnet110(num_classes=10, rate=1.0):
+def resnet110_v2(num_classes=10, rate=1.0):
     """Constructs a ResNet-32 model for CIFAR-10 (by default)
   Args:
     num_classes (uint): number of classes
