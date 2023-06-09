@@ -653,8 +653,8 @@ class ExtraLoss(nn.Module):
 
 
 def transform(epoch, model, args):
-    # cur_rate = args.rate - (args.rate - args.compress_rate) * epoch / args.epochs
-    cur_rate = 0.9 - (0.9 - 0.6) * epoch / 400
+    cur_rate = args.rate - (args.rate - args.compress_rate) * epoch / args.epochs
+    #cur_rate = 0.9 - (0.9 - 0.6) * epoch / 400
     for name, module in model.named_modules():
         if isinstance(module, ResNetBasicblock):
             layer1 = module.conv1
@@ -685,7 +685,7 @@ def transform(epoch, model, args):
                                       dilation=layer1.dilation, bias=True if layer1.bias is not None else False)
                 new_layer.weight = nn.Parameter(new_conv_weight)
 
-                new_layer.bias = nn.Parameter(bias) if layer1.bias is not None else None
+                new_layer.bias = nn.Parameter(bias[mask]) if layer1.bias is not None else None
 
                 set_module_v2(model, name, 'conv1', new_layer)
 
