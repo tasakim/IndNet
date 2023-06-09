@@ -12,7 +12,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append((current_dir))
 
 parser = argparse.ArgumentParser(description='Finetune')
-parser.add_argument('--data_path', type=str, help='Path to dataset', default='/ssd/ssd2/n50031076/Dataset/Cifar10')
+parser.add_argument('--data_path', type=str, help='Path to dataset', default='/home/Datasets/Cifar10')
 parser.add_argument('--dataset', type=str, default='cifar10',
                     help='Choose between Cifar10/100 and ImageNet.')
 parser.add_argument('--epochs', type=int, default=400, help='Number of epochs to train.')
@@ -56,6 +56,11 @@ def main():
     criterion = nn.CrossEntropyLoss().cuda(args.local_rank)
     criterions = {'criterion': criterion}
     model = models.__dict__[args.arch](num_classes=num_classes, rate=args.rate)
+    if not os.path.exists('./init.pt'):
+        torch.save(model, './init.pt')
+    else:
+        model = torch.load('./init.pt', map_location='cpu')
+        print_rank0('Loading initial checkpoint.')
     if dist.get_rank() == 0:
         print(model)
         tb_logger = SummaryWriter(log_dir="runs/{}_{}".format(args.arch, time.strftime("%Y-%m-%d %H-%M-%S",
